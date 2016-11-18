@@ -6,20 +6,17 @@ var KEY_ID = 'onloadid' + (new Date() % 9e6).toString(36)
 var KEY_ATTR = 'data-' + KEY_ID
 var INDEX = 0
 
-if (window && window.MutationObserver) {
+if (window != null && window.MutationObserver != null) {
   var observer = new MutationObserver(function (mutations) {
-    if (Object.keys(watch).length < 1) return
-    for (var i = 0; i < mutations.length; i++) {
-      if (mutations[i].attributeName === KEY_ATTR) {
-        eachAttr(mutations[i], turnon, turnoff)
-        continue
+    if (Object.keys(watch).length >= 1) {
+      for (var i = 0; i < mutations.length; i++) {
+        if (mutations[i].attributeName === KEY_ATTR) {
+          eachAttr(mutations[i], turnon, turnoff)
+        } else {
+          eachMutation(mutations[i].removedNodes, turnoff)
+          eachMutation(mutations[i].addedNodes, turnon)
+        }
       }
-      eachMutation(mutations[i].removedNodes, function (index, el) {
-        if (!document.documentElement.contains(el)) turnoff(index, el)
-      })
-      eachMutation(mutations[i].addedNodes, function (index, el) {
-        if (document.documentElement.contains(el)) turnon(index, el)
-      })
     }
   })
 
@@ -59,22 +56,20 @@ function turnoff (index, el) {
 }
 
 function eachAttr (mutation, on, off) {
-  var newValue = mutation.target.getAttribute(KEY_ATTR)
-  if (sameOrigin(mutation.oldValue, newValue)) {
-    watch[newValue] = watch[mutation.oldValue]
-    return
+  var newKey = mutation.target.getAttribute(KEY_ATTR)
+  if (mutation.oldValue != null && newKey != null && watch[mutation.oldValue][3] ===
+      watch[newKey][3]) {
+    // on-load has been called again by the same caller, transfer the old data to the new key
+    watch[newKey] = watch[mutation.oldValue]
+  } else {
+    if (watch[mutation.oldValue]) {
+      // on-load has been called for the same element by another caller
+      off(mutation.oldValue, mutation.target)
+    }
+    if (watch[newKey]) {
+      on(newKey, mutation.target)
+    }
   }
-  if (watch[mutation.oldValue]) {
-    off(mutation.oldValue, mutation.target)
-  }
-  if (watch[newValue]) {
-    on(newValue, mutation.target)
-  }
-}
-
-function sameOrigin (oldValue, newValue) {
-  if (!oldValue || !newValue) return false
-  return watch[oldValue][3] === watch[newValue][3]
 }
 
 function eachMutation (nodes, fn) {
